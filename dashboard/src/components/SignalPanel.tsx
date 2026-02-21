@@ -86,6 +86,27 @@ export function SignalPanel() {
           threshold={gates.oracle_lag.threshold!.toFixed(4)}
           unit="%"
         />
+        <div className="flex items-center justify-between py-1.5">
+          <div className="flex items-center gap-2">
+            <div
+              className={clsx(
+                "h-2 w-2 rounded-full",
+                gates.dual_confirmation.passed ? "bg-green" : "bg-red/60"
+              )}
+            />
+            <span className="text-xs text-text-secondary">Dual Confirm</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-text-muted">B:</span>
+            <span className={clsx("stat-value", gates.dual_confirmation.binance_momentum >= 0 ? "text-green" : "text-red")}>
+              {gates.dual_confirmation.binance_momentum.toFixed(4)}%
+            </span>
+            <span className="text-text-muted">P:</span>
+            <span className={clsx("stat-value", gates.dual_confirmation.pyth_momentum >= 0 ? "text-green" : "text-red")}>
+              {gates.dual_confirmation.pyth_momentum.toFixed(4)}%
+            </span>
+          </div>
+        </div>
         <GateRow
           label="Market Price"
           passed={gates.market_price.passed}

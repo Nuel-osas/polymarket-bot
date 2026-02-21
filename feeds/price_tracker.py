@@ -22,9 +22,10 @@ class PriceTracker:
         self.latest_price: float = 0.0
         self.latest_ts_ms: int = 0
 
-        # Chainlink / oracle tracking
+        # Pyth oracle tracking
         self._oracle_price: float = 0.0
         self._oracle_ts_ms: int = 0
+        self._oracle_prices: deque[PriceSnapshot] = deque()
 
     def update(self, price: float, ts_ms: int) -> None:
         """Add a new Binance price tick."""
@@ -34,9 +35,11 @@ class PriceTracker:
         self._evict()
 
     def update_oracle(self, price: float, ts_ms: int) -> None:
-        """Update the last known oracle (Chainlink) price."""
+        """Update the last known Pyth oracle price and track history."""
         self._oracle_price = price
         self._oracle_ts_ms = ts_ms
+        self._oracle_prices.append(PriceSnapshot(price, ts_ms))
+        self._evict_oracle()
 
     @property
     def momentum_pct(self) -> float:
@@ -84,6 +87,25 @@ class PriceTracker:
         return delta1 * delta2 > 0
 
     @property
+    def oracle_momentum_pct(self) -> float:
+        """Percentage price change of Pyth oracle over the rolling window."""
+        if len(self._oracle_prices) < 2:
+            return 0.0
+        oldest = self._oracle_prices[0].price
+        if oldest == 0:
+            return 0.0
+        return (self._oracle_price - oldest) / oldest
+
+    @property
+    def feeds_agree(self) -> bool:
+        """True when both Binance and Pyth momentum point the same direction."""
+        b = self.momentum_pct
+        p = self.oracle_momentum_pct
+        if b == 0 or p == 0:
+            return False
+        return (b > 0 and p > 0) or (b < 0 and p < 0)
+
+    @property
     def window_size(self) -> int:
         return len(self._prices)
 
@@ -91,3 +113,10 @@ class PriceTracker:
         cutoff = self.latest_ts_ms - self._window_ms
         while self._prices and self._prices[0].timestamp_ms < cutoff:
             self._prices.popleft()
+
+    def _evict_oracle(self) -> None:
+        if not self._oracle_prices:
+            return
+        cutoff = self._oracle_ts_ms - self._window_ms
+        while self._oracle_prices and self._oracle_prices[0].timestamp_ms < cutoff:
+            self._oracle_prices.popleft()

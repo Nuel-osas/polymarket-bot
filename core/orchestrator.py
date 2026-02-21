@@ -193,7 +193,7 @@ class Orchestrator:
                 )
                 log.info(
                     "HEARTBEAT state=%s bal=$%.2f trades=%d W/L=%d/%d (%.0f%%) "
-                    "signals=%d price=$%.2f pyth=$%.2f lag=%.1fs",
+                    "signals=%d price=$%.2f pyth=$%.2f lag=%.1fs agree=%s",
                     self.sm.state.value,
                     self.stats.current_balance,
                     self.stats.total_trades,
@@ -204,6 +204,7 @@ class Orchestrator:
                     self.tracker.latest_price,
                     self.tracker._oracle_price,
                     self.tracker.oracle_lag_seconds,
+                    self.tracker.feeds_agree,
                 )
         except asyncio.CancelledError:
             return

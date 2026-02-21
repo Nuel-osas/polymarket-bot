@@ -38,7 +38,7 @@ class SignalDetector:
         # Determine direction
         side = Side.UP if momentum > 0 else Side.DOWN
 
-        # Gate 3: Oracle lag — Chainlink must diverge or be stale
+        # Gate 3: Oracle lag — Pyth must diverge or be stale
         oracle_div = tracker.oracle_divergence_pct
         oracle_lag_s = tracker.oracle_lag_seconds
         oracle_lagging = (
@@ -47,7 +47,11 @@ class SignalDetector:
         if not oracle_lagging:
             return None
 
-        # Gate 4: Market price — target side must be ≤ max entry price
+        # Gate 4: Dual confirmation — Binance and Pyth must agree on direction
+        if not tracker.feeds_agree:
+            return None
+
+        # Gate 5: Market price — target side must be ≤ max entry price
         target_price = market.price_for(side)
         if target_price > settings.max_entry_price:
             return None
@@ -103,5 +107,12 @@ class SignalDetector:
         # Consistent trend bonus (+0.10)
         if tracker.trend_consistent:
             score += 0.10
+
+        # Dual confirmation bonus (+0.15) — both Binance and Pyth agree
+        if tracker.feeds_agree:
+            score += 0.15
+            # Extra bonus if Pyth momentum is also strong
+            if abs(tracker.oracle_momentum_pct) > settings.momentum_threshold:
+                score += 0.05
 
         return min(score, 0.95)

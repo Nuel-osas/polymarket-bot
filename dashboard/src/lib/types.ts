@@ -90,11 +90,18 @@ export interface ActiveSignal {
   binance_price: number;
 }
 
+export interface DualConfirmation {
+  passed: boolean;
+  binance_momentum: number;
+  pyth_momentum: number;
+}
+
 export interface SignalData {
   gates: {
     timing: GateStatus;
     momentum: GateStatus;
     oracle_lag: GateStatus & { lag_seconds: number };
+    dual_confirmation: DualConfirmation;
     market_price: GateStatus;
     confidence: GateStatus;
   };

@@ -127,6 +127,7 @@ async def handle_signal(request: web.Request) -> web.Response:
         t.oracle_divergence_pct > settings.oracle_lag_threshold
         or t.oracle_lag_seconds > 2.0
     )
+    dual_ok = t.feeds_agree
     target_price = 0.0
     price_ok = False
     if market:
@@ -137,7 +138,7 @@ async def handle_signal(request: web.Request) -> web.Response:
 
     # Confidence would be (approximate)
     confidence = 0.0
-    if timing_ok and momentum_ok and oracle_ok and price_ok:
+    if timing_ok and momentum_ok and oracle_ok and dual_ok and price_ok:
         signal = bot.detector.evaluate(t, market) if market else None
         if signal:
             confidence = signal.confidence
@@ -172,6 +173,11 @@ async def handle_signal(request: web.Request) -> web.Response:
                 "value": round(t.oracle_divergence_pct * 100, 4),
                 "threshold": round(settings.oracle_lag_threshold * 100, 4),
                 "lag_seconds": round(t.oracle_lag_seconds, 1),
+            },
+            "dual_confirmation": {
+                "passed": dual_ok,
+                "binance_momentum": round(t.momentum_pct * 100, 4),
+                "pyth_momentum": round(t.oracle_momentum_pct * 100, 4),
             },
             "market_price": {
                 "passed": price_ok,
