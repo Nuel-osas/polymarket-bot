@@ -49,6 +49,7 @@ class Orchestrator:
         self._clob_client = None
         self._shutdown = asyncio.Event()
         self._start_time: float = time.time()
+        self._pyth_fallback_logged: bool = False
 
     async def run(self) -> None:
         """Start all tasks and run until shutdown."""
@@ -107,22 +108,40 @@ class Orchestrator:
     # ─── Async Tasks ───────────────────────────────────────────
 
     async def _feed_task(self) -> None:
-        """Consume Binance WebSocket and update price tracker."""
+        """Consume Binance WebSocket and update price tracker.
+
+        Falls back to Pyth polling if Binance is unreachable.
+        """
         try:
             async for price, ts_ms in binance_btc_trades():
                 self.tracker.update(price, ts_ms)
         except asyncio.CancelledError:
             return
+        except Exception:
+            log.warning("Binance WS exhausted retries, feed task stopped")
 
     async def _oracle_task(self, session: aiohttp.ClientSession) -> None:
-        """Poll Pyth Network for BTC/USD oracle price."""
+        """Poll Pyth Network for BTC/USD price.
+
+        Updates oracle tracking, and also serves as the primary price
+        feed when Binance WS is unavailable.
+        """
         try:
             while not self._shutdown.is_set():
                 result = await fetch_pyth_price(session)
                 if result:
                     price, ts_ms = result
                     self.tracker.update_oracle(price, ts_ms)
-                await asyncio.sleep(1)
+                    # If Binance feed is down, use Pyth as primary price too
+                    if self.tracker.latest_price == 0 or self.tracker.latest_ts_ms == 0:
+                        self.tracker.update(price, ts_ms)
+                        if not self._pyth_fallback_logged:
+                            log.info("Using Pyth as primary price feed (Binance unavailable)")
+                            self._pyth_fallback_logged = True
+                    elif ts_ms > self.tracker.latest_ts_ms + 5000:
+                        # Binance stale for >5s, switch to Pyth
+                        self.tracker.update(price, ts_ms)
+                await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             return
 
